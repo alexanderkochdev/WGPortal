@@ -1,0 +1,34 @@
+{
+  "projectName": "WGPortal",
+  "analyzedAt": "2026-07-13T20:50:26.085Z",
+  "workspaceRoot": "z:\\Repositorys\\WGPortal",
+  "entryPoints": [],
+  "configFiles": [],
+  "directories": [
+    {
+      "path": "z:\\Repositorys\\WGPortal\\src",
+      "purpose": "source code"
+    }
+  ],
+  "testStructure": {
+    "testDir": "",
+    "framework": "",
+    "testFiles": 0
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "keyExports": [],
+  "largeFiles": [],
+  "fileCounts": {
+    ".sh": 1,
+    ".md": 1,
+    ".yml": 2
+  },
+  "hasTypeScript": false,
+  "hasJavaScript": false,
+  "hasReact": false,
+  "hasTests": false,
+  "buildScripts": [],
+  "lintScripts": [],
+  "testScripts": []
+}

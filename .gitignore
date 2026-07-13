@@ -1,0 +1,34 @@
+# Build output
+build/
+target/
+*.jar
+*.class
+*.tar.gz
+*.zip
+
+# Gradle (if generated alongside Maven)
+.gradle/
+
+# Fabric workspace
+fabric/
+.ide/
+*.launch
+
+# Maven
+dependency-reduced-pom.xml
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.log

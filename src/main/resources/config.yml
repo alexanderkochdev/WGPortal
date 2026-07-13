@@ -1,0 +1,11 @@
+# WGPortal -- Configuration
+# ========================
+
+# Cooldown between portal teleports (in seconds).
+# Player receives a message if they enter a portal region during cooldown.
+cooldown-seconds: 5
+
+# Message shown when a player is on cooldown.
+# Use Minecraft color codes: &b = aqua/hellblau, &f = white, &e = yellow, etc.
+# %d is replaced with the remaining seconds.
+cooldown-message: "&fYou are on cooldown for &b%d seconds&f."

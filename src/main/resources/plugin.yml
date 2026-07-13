@@ -1,0 +1,8 @@
+name: WGPortal
+version: ${project.version}
+main: dev.alexanderkoch.wgportal.WGPortal
+api-version: 1.21
+depend: [WorldGuard]
+description: Lightweight WorldGuard portal plugin — turn WorldGuard regions into cross-server portals.
+author: Alexander Koch
+website: https://github.com/alexanderkochdev/WGPortal
