@@ -9,28 +9,56 @@
 ### Core Components
 
 ```
-┌─────────────────────────────────────────┐
-│              WGPortal                    │
-├─────────────────────────────────────────┤
-│  WGPortal.java    ← Plugin + Flags +    │
-│                     Events + Regions    │
-│                     (single class)      │
-├─────────────────────────────────────────┤
-│  plugin.yml / config.yml                 │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│              WGPortal                        │
+├─────────────────────────────────────────────┤
+│  WGPortal.java    ← Plugin + Flags +        │
+│                     Events + Regions +      │
+│                     PluginMessages          │
+│                     (single class)          │
+├─────────────────────────────────────────────┤
+│  Channels: BungeeCord (out)                 │
+│            wgportal:teleport (in/out)       │
+├─────────────────────────────────────────────┤
+│  plugin.yml / config.yml                     │
+└─────────────────────────────────────────────┘
 ```
 
 Everything lives in a single, focused class. No unnecessary abstractions.
 
+### PluginMessage Protocol (`wgportal:teleport`)
+
+| Direction | Channel | Payload | Purpose |
+|---|---|---|---|
+| Source → BungeeCord → Target | `BungeeCord` (Forward) | `UUID` + `world` + `coords` | Forward pending teleport data to target server |
+| Target ← BungeeCord | `wgportal:teleport` | `UUID` + `world` + `coords` | Receive pending teleport on target server |
+
+Payload format (UTF strings, written via DataOutputStream):
+1. Player UUID
+2. Target world name (`""` if empty)
+3. Target coords (`""` if empty, `x,y,z` or `x,y,z,yaw,pitch` if set)
+
 ### Data Flow
 
 ```
-Player walks into WG region with `portal-enabled` + `portal-target` flags
+Player walks into WG region with `portal-enabled` + action flags
   → WGPortal.onPlayerMove(PlayerMoveEvent)
   → Cooldown check (configurable, default 5s per player)
   → If on cooldown: player receives message with remaining seconds
-  → BungeeCord "Connect" PluginMessage
-  → Target server receives player
+  │
+  ├─ portal-target set
+  │  │  If portal-world / portal-coords also set:
+  │  │    → Forward "wgportal:teleport" PluginMessage to target server
+  │  │      → Target server: onPluginMessageReceived → stores PendingTeleport
+  │  │      → Target server: onPlayerJoin → applies teleport
+  │  │  → BungeeCord "Connect" PluginMessage
+  │  │  → Target server receives player → WGPortal positions them
+  │
+  ├─ portal-coords set (no portal-target)
+  │  → Player.teleport(Location) — same server, exact coords
+  │
+  └─ portal-world set (no portal-target)
+     → Player.teleport(World.spawnLocation) — same server, world spawn
 ```
 
 ## Build System
