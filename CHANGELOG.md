@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-07-14
+
+### Security
+- **Thread-safe Maps**: `pendingTeleports` and `cooldowns` changed from `HashMap` to `ConcurrentHashMap` to prevent race conditions between Netty threads (PluginMessage) and the main thread (events).
+- **Input validation**: `UUID.fromString()` in `onPluginMessageReceived` is now wrapped in try/catch — malformed data on the `wgportal:teleport` channel no longer crashes the handler.
+- **Coordinate validation**: NaN, Infinity, and extreme values (`>30M`) are now rejected in `parseCoords()` to prevent void-teleportation.
+- **TTL for pending teleports**: Stale entries are automatically discarded after 15 seconds. A periodic cleanup task (every 30s) prevents memory leaks from disconnected players.
+- **Race condition protection**: `onPlayerJoin` retries the pending teleport lookup after 5 ticks (250ms) as a safety net if the Forward PluginMessage arrives just after the Join event.
+
 ## [1.0.2] - 2026-07-14
 
 ### Added

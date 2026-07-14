@@ -25,9 +25,9 @@ import org.bukkit.plugin.messaging.PluginMessageListener;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * WGPortal — lightweight WorldGuard portal plugin for Paper 1.21.
@@ -44,7 +44,7 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
 
     private static final String BUNGEE_CHANNEL = "BungeeCord";
     private static final String TELEPORT_CHANNEL = "wgportal:teleport";
-    private final Map<UUID, PendingTeleport> pendingTeleports = new HashMap<>();
+    private final Map<UUID, PendingTeleport> pendingTeleports = new ConcurrentHashMap<>();
 
     // ---- Custom WorldGuard Flags ----
     public static StringFlag PORTAL_TARGET;
@@ -52,7 +52,7 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
     public static StringFlag PORTAL_COORDS;
     public static StateFlag PORTAL_ENABLED;
 
-    private final Map<UUID, Long> cooldowns = new HashMap<>();
+    private final Map<UUID, Long> cooldowns = new ConcurrentHashMap<>();
     private int cooldownSeconds;
     private String cooldownMessage;
 
@@ -95,6 +95,11 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
 
         // Register events
         getServer().getPluginManager().registerEvents(this, this);
+
+        // Periodic cleanup of stale pending teleports (every 30 seconds)
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            pendingTeleports.values().removeIf(PendingTeleport::isExpired);
+        }, 600L, 600L);
 
         getLogger().info("WGPortal v" + getPluginMeta().getVersion() + " enabled.");
     }
@@ -203,23 +208,42 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
         if (!channel.equals(TELEPORT_CHANNEL)) return;
 
-        ByteArrayDataInput in = ByteStreams.newDataInput(message);
-        UUID playerId = UUID.fromString(in.readUTF());
-        String worldName = in.readUTF();
-        String coordsValue = in.readUTF();
+        try {
+            ByteArrayDataInput in = ByteStreams.newDataInput(message);
+            UUID playerId = UUID.fromString(in.readUTF());
+            String worldName = in.readUTF();
+            String coordsValue = in.readUTF();
 
-        pendingTeleports.put(playerId, new PendingTeleport(
-                isEmpty(worldName) ? null : worldName,
-                isEmpty(coordsValue) ? null : coordsValue
-        ));
+            // Ignore TTL-expired data that arrived too late
+            if (pendingTeleports.containsKey(playerId)) return;
+
+            pendingTeleports.put(playerId, new PendingTeleport(
+                    isEmpty(worldName) ? null : worldName,
+                    isEmpty(coordsValue) ? null : coordsValue,
+                    System.currentTimeMillis()
+            ));
+        } catch (Exception e) {
+            getLogger().warning("Invalid wgportal:teleport message: " + e.getMessage());
+        }
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         PendingTeleport pending = pendingTeleports.remove(player.getUniqueId());
-        if (pending == null) return;
-        applyPendingTeleport(player, pending);
+        if (pending != null && !pending.isExpired()) {
+            applyPendingTeleport(player, pending);
+            return;
+        }
+
+        // Safety net: Forward may arrive just after Join (race condition).
+        // Retry once after 5 ticks (250ms) before giving up.
+        getServer().getScheduler().runTaskLater(this, () -> {
+            PendingTeleport late = pendingTeleports.remove(player.getUniqueId());
+            if (late != null && !late.isExpired()) {
+                applyPendingTeleport(player, late);
+            }
+        }, 5L);
     }
 
     private void applyPendingTeleport(Player player, PendingTeleport pending) {
@@ -288,6 +312,10 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
             double y = Double.parseDouble(parts[1].trim());
             double z = Double.parseDouble(parts[2].trim());
 
+            // Reject NaN, Infinity, and extreme values
+            if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return null;
+            if (Math.abs(x) > 30_000_000 || Math.abs(z) > 30_000_000) return null;
+
             World world;
             if (!isEmpty(worldName)) {
                 world = player.getServer().getWorld(worldName);
@@ -299,13 +327,29 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
             float yaw = player.getLocation().getYaw();
             float pitch = player.getLocation().getPitch();
             if (parts.length >= 5) {
-                yaw = Float.parseFloat(parts[3].trim());
-                pitch = Float.parseFloat(parts[4].trim());
+                yaw = parseAngle(parts[3].trim(), player.getLocation().getYaw());
+                pitch = parseAngle(parts[4].trim(), player.getLocation().getPitch());
             }
 
             return new Location(world, x, y, z, yaw, pitch);
         } catch (NumberFormatException e) {
             return null;
+        }
+    }
+
+    /** Returns false for NaN and ±Infinity. */
+    private static boolean isFinite(double d) {
+        return !Double.isNaN(d) && !Double.isInfinite(d);
+    }
+
+    /** Parses a yaw/pitch angle, rejecting NaN/Infinity. Falls back to default on bad input. */
+    private static float parseAngle(String s, float fallback) {
+        try {
+            float f = Float.parseFloat(s);
+            if (Float.isNaN(f) || Float.isInfinite(f)) return fallback;
+            return f;
+        } catch (NumberFormatException e) {
+            return fallback;
         }
     }
 
@@ -315,6 +359,13 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
     }
 
     // ---- Pending teleport record ----
+    // TTL: discard stale pending teleports after 15 seconds
 
-    private record PendingTeleport(String world, String coords) {}
+    private static final long TELEPORT_TTL_MS = 15_000L;
+
+    private record PendingTeleport(String world, String coords, long createdAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - createdAt > TELEPORT_TTL_MS;
+        }
+    }
 }
