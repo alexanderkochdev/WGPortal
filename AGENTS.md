@@ -10,7 +10,7 @@
 
 ```
 ┌─────────────────────────────────────────────┐
-│              WGPortal                        │
+│              WGPortal (Bukkit)               │
 ├─────────────────────────────────────────────┤
 │  WGPortal.java    ← Plugin + Flags +        │
 │                     Events + Regions +      │
@@ -19,24 +19,55 @@
 ├─────────────────────────────────────────────┤
 │  Channels: BungeeCord (out)                 │
 │            wgportal:teleport (in/out)       │
+│            wgportal:apply (in)              │
 ├─────────────────────────────────────────────┤
 │  plugin.yml / config.yml                     │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│         WGPortalBungee (BungeeCord)          │
+├─────────────────────────────────────────────┤
+│  WGPortalBungee.java   ← Bridge: receives    │
+│                          teleport data from   │
+│                          source server,       │
+│                          forwards on          │
+│                          ServerConnectedEvent │
+├─────────────────────────────────────────────┤
+│  Channels: wgportal:teleport (in)            │
+│            wgportal:apply (out)              │
+├─────────────────────────────────────────────┤
+│  wgportal-bungee/ directory                  │
 └─────────────────────────────────────────────┘
 ```
 
 Everything lives in a single, focused class. No unnecessary abstractions.
 
-### PluginMessage Protocol (`wgportal:teleport`)
+### PluginMessage Protocol
+
+#### `wgportal:teleport` (Bukkit → BungeeCord)
+
+Sent by the Bukkit source server to BungeeCord when a player enters a portal with `portal-target` + world/coords.
 
 | Direction | Channel | Payload | Purpose |
 |---|---|---|---|
-| Source → BungeeCord → Target | `BungeeCord` (Forward) | `UUID` + `world` + `coords` | Forward pending teleport data to target server |
-| Target ← BungeeCord | `wgportal:teleport` | `UUID` + `world` + `coords` | Receive pending teleport on target server |
+| Bukkit Source → BungeeCord | `wgportal:teleport` (out) | `UUID` + `world` + `coords` | Send pending teleport data to BungeeCord |
 
-Payload format (UTF strings, written via DataOutputStream):
+Payload format (UTF strings, via DataOutputStream):
 1. Player UUID
 2. Target world name (`""` if empty)
 3. Target coords (`""` if empty, `x,y,z` or `x,y,z,yaw,pitch` if set)
+
+#### `wgportal:apply` (BungeeCord → Bukkit Target)
+
+Sent by BungeeCord to the target server AFTER the player has connected (`ServerConnectedEvent`).
+
+| Direction | Channel | Payload | Purpose |
+|---|---|---|---|
+| BungeeCord → Bukkit Target | `wgportal:apply` (via `player.sendData`) | `world` + `coords` | Apply teleport on target server |
+
+Payload format (UTF strings, via DataOutputStream):
+1. Target world name (`""` if empty)
+2. Target coords (`""` if empty, `x,y,z` or `x,y,z,yaw,pitch` if set)
 
 ### Data Flow
 
@@ -48,11 +79,14 @@ Player walks into WG region with `portal-enabled` + action flags
   │
   ├─ portal-target set
   │  │  If portal-world / portal-coords also set:
-  │  │    → Forward "wgportal:teleport" PluginMessage to target server
-  │  │      → Target server: onPluginMessageReceived → stores PendingTeleport
-  │  │      → Target server: onPlayerJoin → applies teleport
+  │  │    → sendPendingTeleport(player, world, coords)
+  │  │      → player.sendPluginMessage("wgportal:teleport") to BungeeCord
+  │  │      → WGPortalBungee stores PendingTeleport
   │  │  → BungeeCord "Connect" PluginMessage
-  │  │  → Target server receives player → WGPortal positions them
+  │  │  → BungeeCord moves player to target server
+  │  │  → WGPortalBungee.onServerConnected(ServerConnectedEvent)
+  │  │    → player.sendData("wgportal:apply", world+coords) to target server
+  │  │    → WGPortal (Bukkit): onPluginMessageReceived → teleports immediately
   │
   ├─ portal-coords set (no portal-target)
   │  → Player.teleport(Location) — same server, exact coords
@@ -100,6 +134,7 @@ GitHub Actions (`.github/workflows/build.yml`):
 3. **No persistent state**: No database, no files, no inventory sync. Pure event-driven portalling.
 4. **Minimal footprint**: ~150 lines of code, ~15 KB JAR.
 5. **Cooldown-only rate limiting**: A configurable per-player cooldown (default 5s) prevents accidental double-teleports.
+6. **BungeeCord companion for cross-server positioning**: Reliable cross-server coordinate/world teleportation requires `WGPortalBungee` on the proxy. Local-only teleports (same server) work without it.
 
 ## Configuration
 

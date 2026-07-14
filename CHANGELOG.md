@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-07-14
+
+### Added
+- **WGPortalBungee companion plugin**: New standalone BungeeCord plugin that reliably forwards teleport data across servers. Receives data on `wgportal:teleport`, stores it, and sends it to the target server on `ServerConnectedEvent` via `player.sendData(wgportal:apply)`.
+- **`wgportal:apply` channel**: New Bukkit incoming channel for immediate cross-server teleport application (player is already on the target server).
+- **`wgportal:teleport` as Bukkit outgoing channel**: Source server now sends teleport data directly to BungeeCord instead of using `Forward` on the `BungeeCord` channel.
+
+### Changed
+- **Cross-server positioning rewritten**: The previous `Forward`-based approach was unreliable because BungeeCord drops PluginMessages sent via a player who disconnects (`Connect`) immediately after. The new architecture uses a BungeeCord companion plugin that intercepts `ServerConnectedEvent` and sends the data AFTER the player is connected, ensuring delivery.
+- `sendPendingTeleport()` no longer takes a `target` parameter — data is sent directly to BungeeCord, which handles routing.
+
+### Removed
+- `BungeeCord` channel `Forward`-based teleport data transfer (unreliable).
+
 ## [1.0.3] - 2026-07-14
 
 ### Security

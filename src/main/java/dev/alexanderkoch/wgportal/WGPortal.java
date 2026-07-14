@@ -44,6 +44,7 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
 
     private static final String BUNGEE_CHANNEL = "BungeeCord";
     private static final String TELEPORT_CHANNEL = "wgportal:teleport";
+    private static final String APPLY_CHANNEL = "wgportal:apply";
     private final Map<UUID, PendingTeleport> pendingTeleports = new ConcurrentHashMap<>();
 
     // ---- Custom WorldGuard Flags ----
@@ -91,7 +92,9 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
 
         // Register channels
         getServer().getMessenger().registerOutgoingPluginChannel(this, BUNGEE_CHANNEL);
+        getServer().getMessenger().registerOutgoingPluginChannel(this, TELEPORT_CHANNEL);
         getServer().getMessenger().registerIncomingPluginChannel(this, TELEPORT_CHANNEL, this);
+        getServer().getMessenger().registerIncomingPluginChannel(this, APPLY_CHANNEL, this);
 
         // Register events
         getServer().getPluginManager().registerEvents(this, this);
@@ -107,7 +110,9 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
     @Override
     public void onDisable() {
         getServer().getMessenger().unregisterOutgoingPluginChannel(this, BUNGEE_CHANNEL);
+        getServer().getMessenger().unregisterOutgoingPluginChannel(this, TELEPORT_CHANNEL);
         getServer().getMessenger().unregisterIncomingPluginChannel(this, TELEPORT_CHANNEL);
+        getServer().getMessenger().unregisterIncomingPluginChannel(this, APPLY_CHANNEL);
         pendingTeleports.clear();
         cooldowns.clear();
         getLogger().info("WGPortal disabled.");
@@ -162,10 +167,11 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
             if (!isEmpty(target)) {
                 getLogger().info("Teleporting " + player.getName() + " → " + target);
 
-                // If portal-world / portal-coords are also set, forward teleport
-                // data to the target server so it can position the player on join
+                // If portal-world / portal-coords are also set, send teleport data
+                // to BungeeCord so the companion plugin can position the player
+                // on the target server after the server switch.
                 if (!isEmpty(world) || !isEmpty(coords)) {
-                    sendPendingTeleport(player, target, world, coords);
+                    sendPendingTeleport(player, world, coords);
                 }
 
                 ByteArrayDataOutput out = ByteStreams.newDataOutput();
@@ -206,6 +212,36 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
 
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
+        // Incoming teleport data from another server (via BungeeCord companion plugin)
+        if (channel.equals(APPLY_CHANNEL)) {
+            try {
+                ByteArrayDataInput in = ByteStreams.newDataInput(message);
+                String worldName = in.readUTF();
+                String coordsValue = in.readUTF();
+
+                // Player is already on this server — teleport immediately
+                if (!isEmpty(coordsValue)) {
+                    Location loc = parseCoords(coordsValue,
+                            isEmpty(worldName) ? null : worldName, player);
+                    if (loc != null) {
+                        player.teleport(loc);
+                        getLogger().info("Applied cross-server teleport for "
+                                + player.getName() + " → " + formatLocation(loc));
+                    }
+                } else if (!isEmpty(worldName)) {
+                    World w = getServer().getWorld(worldName);
+                    if (w != null) {
+                        player.teleport(w.getSpawnLocation());
+                        getLogger().info("Applied cross-server teleport for "
+                                + player.getName() + " → world " + worldName);
+                    }
+                }
+            } catch (Exception e) {
+                getLogger().warning("Failed to apply teleport: " + e.getMessage());
+            }
+            return;
+        }
+
         if (!channel.equals(TELEPORT_CHANNEL)) return;
 
         try {
@@ -270,30 +306,22 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
     }
 
     /**
-     * Sends a Forward PluginMessage to the target server with the player's
-     * pending teleport data (world + coords). The target server's WGPortal
-     * instance will catch this and apply it on player join.
+     * Sends the player's pending teleport data (world + coords) to BungeeCord
+     * on the wgportal:teleport channel. The WGPortalBungee companion plugin
+     * will store it and forward it to the target server after the server switch.
      */
-    private void sendPendingTeleport(Player player, String target, String world, String coords) {
+    private void sendPendingTeleport(Player player, String world, String coords) {
         try {
-            ByteArrayOutputStream payloadBytes = new ByteArrayOutputStream();
-            DataOutputStream payloadOut = new DataOutputStream(payloadBytes);
-            payloadOut.writeUTF(player.getUniqueId().toString());
-            payloadOut.writeUTF(world != null ? world : "");
-            payloadOut.writeUTF(coords != null ? coords : "");
-            payloadOut.close();
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(bytes);
+            out.writeUTF(player.getUniqueId().toString());
+            out.writeUTF(world != null ? world : "");
+            out.writeUTF(coords != null ? coords : "");
+            out.close();
 
-            ByteArrayDataOutput out = ByteStreams.newDataOutput();
-            out.writeUTF("Forward");
-            out.writeUTF(target);
-            out.writeUTF(TELEPORT_CHANNEL);
-            byte[] payload = payloadBytes.toByteArray();
-            out.writeShort(payload.length);
-            out.write(payload);
-
-            player.sendPluginMessage(this, BUNGEE_CHANNEL, out.toByteArray());
+            player.sendPluginMessage(this, TELEPORT_CHANNEL, bytes.toByteArray());
         } catch (IOException e) {
-            getLogger().warning("Failed to forward pending teleport data: " + e.getMessage());
+            getLogger().warning("Failed to send teleport data: " + e.getMessage());
         }
     }
 
