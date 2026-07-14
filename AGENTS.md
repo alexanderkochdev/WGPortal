@@ -86,8 +86,8 @@ cooldown-message: "..."        # Message during cooldown (§b = aqua, %d = secon
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `portal-target` | String | — | BungeeCord server name to send players to |
-| `portal-world` | String | — | Target world name (reserved for future use) |
-| `portal-coords` | String | — | Target coordinates (reserved for future use) |
+| `portal-world` | String | — | Target world name — teleports player to world spawn |
+| `portal-coords` | String | — | Target coordinates (`x,y,z` or `x,y,z,yaw,pitch`) — teleports player to exact location |
 | `portal-enabled` | StateFlag | ALLOW | Whether this region acts as a portal |
 
 ## Naming Conventions
@@ -99,4 +99,5 @@ cooldown-message: "..."        # Message during cooldown (§b = aqua, %d = secon
 | Methods | `camelCase` | `onPlayerMove()`, `setupPortalRegions()` |
 | Config keys | `kebab-case` | `portal-target`, `server-name` |
 | Regions | `PascalCase` | `FarmPortal`, `NetherPortal` |
+| Portal coordinates | `x,y,z` or `x,y,z,yaw,pitch` | `100,64,-200`, `100,64,-200,90,0` |
 | BungeeCord targets | `kebab-case` | `lobby-farm`, `survival-nether` |
