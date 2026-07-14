@@ -23,12 +23,22 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Build all modules with Maven
+      - name: Build WGPortal (Bukkit)
         run: mvn clean package --batch-mode --no-transfer-progress
+
+      - name: Build WGPortalBungee (BungeeCord)
+        run: mvn clean package --batch-mode --no-transfer-progress -f wgportal-bungee/pom.xml
 
       - name: Upload WGPortal Artifact
         uses: actions/upload-artifact@v4
         with:
           name: WGPortal
           path: target/WGPortal-*.jar
+          if-no-files-found: error
+
+      - name: Upload WGPortalBungee Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WGPortalBungee
+          path: wgportal-bungee/target/WGPortalBungee-*.jar
           if-no-files-found: error
