@@ -111,7 +111,8 @@ public final class WGPortalVelocity {
                 out.writeUTF(pending.coords());
             }
 
-            event.getServer().sendPluginMessage(APPLY_CHANNEL, bytes.toByteArray());
+            player.getCurrentServer().ifPresent(conn ->
+                    conn.sendPluginMessage(APPLY_CHANNEL, bytes.toByteArray()));
             logger.info("Applied teleport for {} -> world={} coords={}",
                     player.getUsername(), pending.world(), pending.coords());
         } catch (IOException e) {
