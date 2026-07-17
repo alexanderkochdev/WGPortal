@@ -65,11 +65,10 @@ public final class WGPortalVelocity {
             return;
         }
 
-        if (!(event.getSource() instanceof Player player)) {
-            return;
-        }
-
         event.setResult(PluginMessageEvent.ForwardResult.handled());
+
+        logger.info("Received plugin message on {} (source: {})",
+                TELEPORT_CHANNEL.getId(), event.getSource().getClass().getSimpleName());
 
         ByteArrayDataInput in = ByteStreams.newDataInput(event.getData());
 
@@ -77,7 +76,7 @@ public final class WGPortalVelocity {
         try {
             uuidStr = in.readUTF();
         } catch (Exception e) {
-            logger.warn("Malformed teleport data from {}", player.getUsername());
+            logger.warn("Malformed teleport data (failed to read UUID)");
             return;
         }
 
@@ -85,7 +84,7 @@ public final class WGPortalVelocity {
         try {
             uuid = UUID.fromString(uuidStr);
         } catch (IllegalArgumentException e) {
-            logger.warn("Invalid UUID in teleport data from {}", player.getUsername());
+            logger.warn("Invalid UUID in teleport data: {}", uuidStr);
             return;
         }
 
@@ -93,7 +92,12 @@ public final class WGPortalVelocity {
         String coords = in.readUTF();
 
         pendingTeleports.put(uuid, new PendingTeleport(world, coords, System.currentTimeMillis()));
-        logger.info("Stored teleport for {} -> world={} coords={}", player.getUsername(), world, coords);
+
+        String playerName = server.getPlayer(uuid)
+                .map(Player::getUsername)
+                .orElse("unknown");
+        logger.info("Stored teleport for {} ({}) -> world={} coords={}",
+                playerName, uuid, world, coords);
     }
 
     @Subscribe

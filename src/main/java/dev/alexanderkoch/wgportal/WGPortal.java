@@ -314,11 +314,15 @@ public final class WGPortal extends JavaPlugin implements Listener, PluginMessag
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream out = new DataOutputStream(bytes);
+            String w = world != null ? world : "";
+            String c = coords != null ? coords : "";
             out.writeUTF(player.getUniqueId().toString());
-            out.writeUTF(world != null ? world : "");
-            out.writeUTF(coords != null ? coords : "");
+            out.writeUTF(w);
+            out.writeUTF(c);
             out.close();
 
+            getLogger().info("Sending teleport data via " + TELEPORT_CHANNEL
+                    + " for " + player.getName() + ": world='" + w + "' coords='" + c + "'");
             player.sendPluginMessage(this, TELEPORT_CHANNEL, bytes.toByteArray());
         } catch (IOException e) {
             getLogger().warning("Failed to send teleport data: " + e.getMessage());
