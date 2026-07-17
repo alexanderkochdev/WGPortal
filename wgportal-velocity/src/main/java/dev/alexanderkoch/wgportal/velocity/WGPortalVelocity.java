@@ -56,7 +56,6 @@ public final class WGPortalVelocity {
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
         server.getChannelRegistrar().register(TELEPORT_CHANNEL, APPLY_CHANNEL);
-        server.getEventManager().register(this, this);
         logger.info("WGPortalVelocity enabled — listening for teleport data on Velocity.");
     }
 
