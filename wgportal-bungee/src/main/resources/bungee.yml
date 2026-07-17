@@ -1,5 +1,0 @@
-name: WGPortalBungee
-version: 1.0.4
-author: alexanderkochdev
-main: dev.alexanderkoch.wgportal.bungee.WGPortalBungee
-description: "BungeeCord companion for WGPortal — forwards teleport data across servers."

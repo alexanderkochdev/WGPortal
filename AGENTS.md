@@ -17,7 +17,7 @@
 │                     PluginMessages          │
 │                     (single class)          │
 ├─────────────────────────────────────────────┤
-│  Channels: BungeeCord (out)                 │
+│  Channels: Velocity (out)                   │
 │            wgportal:teleport (in/out)       │
 │            wgportal:apply (in)              │
 ├─────────────────────────────────────────────┤
@@ -25,18 +25,18 @@
 └─────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────┐
-│         WGPortalBungee (BungeeCord)          │
+│        WGPortalVelocity (Velocity)           │
 ├─────────────────────────────────────────────┤
-│  WGPortalBungee.java   ← Bridge: receives    │
-│                          teleport data from   │
-│                          source server,       │
-│                          forwards on          │
-│                          ServerConnectedEvent │
+│  WGPortalVelocity.java ← Bridge: receives   │
+│                          teleport data from  │
+│                          source server,      │
+│                          forwards on         │
+│                          ServerConnectedEvent│
 ├─────────────────────────────────────────────┤
-│  Channels: wgportal:teleport (in)            │
-│            wgportal:apply (out)              │
+│  Channels: wgportal:teleport (in)           │
+│            wgportal:apply (out)             │
 ├─────────────────────────────────────────────┤
-│  wgportal-bungee/ directory                  │
+│  wgportal-velocity/ directory               │
 └─────────────────────────────────────────────┘
 ```
 
@@ -44,26 +44,26 @@ Everything lives in a single, focused class. No unnecessary abstractions.
 
 ### PluginMessage Protocol
 
-#### `wgportal:teleport` (Bukkit → BungeeCord)
+#### `wgportal:teleport` (Bukkit → Velocity)
 
-Sent by the Bukkit source server to BungeeCord when a player enters a portal with `portal-target` + world/coords.
+Sent by the Bukkit source server to the Velocity proxy when a player enters a portal with `portal-target` + world/coords.
 
 | Direction | Channel | Payload | Purpose |
 |---|---|---|---|
-| Bukkit Source → BungeeCord | `wgportal:teleport` (out) | `UUID` + `world` + `coords` | Send pending teleport data to BungeeCord |
+| Bukkit Source → Velocity | `wgportal:teleport` (out) | `UUID` + `world` + `coords` | Send pending teleport data to Velocity |
 
 Payload format (UTF strings, via DataOutputStream):
 1. Player UUID
 2. Target world name (`""` if empty)
 3. Target coords (`""` if empty, `x,y,z` or `x,y,z,yaw,pitch` if set)
 
-#### `wgportal:apply` (BungeeCord → Bukkit Target)
+#### `wgportal:apply` (Velocity → Bukkit Target)
 
-Sent by BungeeCord to the target server AFTER the player has connected (`ServerConnectedEvent`).
+Sent by Velocity to the target server AFTER the player has connected (`ServerConnectedEvent`).
 
 | Direction | Channel | Payload | Purpose |
 |---|---|---|---|
-| BungeeCord → Bukkit Target | `wgportal:apply` (via `player.sendData`) | `world` + `coords` | Apply teleport on target server |
+| Velocity → Bukkit Target | `wgportal:apply` (via `serverConnection.sendPluginMessage`) | `world` + `coords` | Apply teleport on target server |
 
 Payload format (UTF strings, via DataOutputStream):
 1. Target world name (`""` if empty)
@@ -80,12 +80,12 @@ Player walks into WG region with `portal-enabled` + action flags
   ├─ portal-target set
   │  │  If portal-world / portal-coords also set:
   │  │    → sendPendingTeleport(player, world, coords)
-  │  │      → player.sendPluginMessage("wgportal:teleport") to BungeeCord
-  │  │      → WGPortalBungee stores PendingTeleport
-  │  │  → BungeeCord "Connect" PluginMessage
-  │  │  → BungeeCord moves player to target server
-  │  │  → WGPortalBungee.onServerConnected(ServerConnectedEvent)
-  │  │    → player.sendData("wgportal:apply", world+coords) to target server
+  │  │      → player.sendPluginMessage("wgportal:teleport") to Velocity
+  │  │      → WGPortalVelocity stores PendingTeleport
+  │  │  → Velocity Connect PluginMessage
+  │  │  → Velocity moves player to target server
+  │  │  → WGPortalVelocity.onServerConnected(ServerConnectedEvent)
+  │  │    → serverConnection.sendPluginMessage("wgportal:apply", world+coords) to target server
   │  │    → WGPortal (Bukkit): onPluginMessageReceived → teleports immediately
   │
   ├─ portal-coords set (no portal-target)
@@ -97,6 +97,8 @@ Player walks into WG region with `portal-enabled` + action flags
 
 ## Build System
 
+### WGPortal (Bukkit)
+
 - **Build tool**: Maven (`pom.xml`)
 - **Java version**: 21
 - **Group ID**: `dev.alexanderkoch`
@@ -104,13 +106,28 @@ Player walks into WG region with `portal-enabled` + action flags
 - **Build command**: `mvn clean package`
 - **Output**: `target/WGPortal-<version>.jar`
 
-### Dependencies (all provided by server)
+#### Dependencies (all provided by server)
 
 | Dependency | Version | Scope | Purpose |
 |---|---|---|---|
 | Paper API | 1.21-R0.1-SNAPSHOT | provided | Bukkit/Paper API |
 | WorldGuard Bukkit | 7.0.11 | provided | Region & flag API |
 | WorldEdit Bukkit | 7.3.6 | provided | Region operations |
+
+### WGPortalVelocity (Velocity Proxy)
+
+- **Build tool**: Maven (`pom.xml` in `wgportal-velocity/`)
+- **Java version**: 21
+- **Group ID**: `dev.alexanderkoch`
+- **Packaging**: JAR via maven-shade-plugin
+- **Build command**: `mvn clean package -f wgportal-velocity/pom.xml`
+- **Output**: `wgportal-velocity/target/WGPortalVelocity-<version>.jar`
+
+#### Dependency (provided by Velocity proxy)
+
+| Dependency | Version | Scope | Purpose |
+|---|---|---|---|
+| Velocity API | 3.3.0-SNAPSHOT | provided | Velocity proxy API |
 
 ## Development Workflow
 
@@ -124,8 +141,8 @@ Player walks into WG region with `portal-enabled` + action flags
 ## CI/CD
 
 GitHub Actions (`.github/workflows/build.yml`):
-- **On push to `main`**: Builds the JAR, uploads as artifact
-- **On tag `v*`**: Builds, creates GitHub Release with JAR attached
+- **On push to `main`**: Builds both the Bukkit JAR and the Velocity JAR, uploads both as artifacts
+- **On tag `v*`**: Builds both, creates GitHub Release with both JARs attached
 
 ## Design Principles
 
@@ -134,7 +151,7 @@ GitHub Actions (`.github/workflows/build.yml`):
 3. **No persistent state**: No database, no files, no inventory sync. Pure event-driven portalling.
 4. **Minimal footprint**: ~150 lines of code, ~15 KB JAR.
 5. **Cooldown-only rate limiting**: A configurable per-player cooldown (default 5s) prevents accidental double-teleports.
-6. **BungeeCord companion for cross-server positioning**: Reliable cross-server coordinate/world teleportation requires `WGPortalBungee` on the proxy. Local-only teleports (same server) work without it.
+6. **Velocity companion for cross-server positioning**: Reliable cross-server coordinate/world teleportation requires `WGPortalVelocity` on the proxy. Local-only teleports (same server) work without it.
 
 ## Configuration
 

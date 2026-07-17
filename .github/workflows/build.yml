@@ -26,8 +26,8 @@ jobs:
       - name: Build WGPortal (Bukkit)
         run: mvn clean package --batch-mode --no-transfer-progress
 
-      - name: Build WGPortalBungee (BungeeCord)
-        run: mvn clean package --batch-mode --no-transfer-progress -f wgportal-bungee/pom.xml
+      - name: Build WGPortalVelocity (Velocity)
+        run: mvn clean package --batch-mode --no-transfer-progress -f wgportal-velocity/pom.xml
 
       - name: Upload WGPortal Artifact
         uses: actions/upload-artifact@v4
@@ -36,9 +36,9 @@ jobs:
           path: target/WGPortal-*.jar
           if-no-files-found: error
 
-      - name: Upload WGPortalBungee Artifact
+      - name: Upload WGPortalVelocity Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WGPortalBungee
-          path: wgportal-bungee/target/WGPortalBungee-*.jar
+          name: WGPortalVelocity
+          path: wgportal-velocity/target/WGPortalVelocity-*.jar
           if-no-files-found: error

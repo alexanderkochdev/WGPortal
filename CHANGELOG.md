@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-17
+
+### Changed
+- **Migrated WGPortalBungee to WGPortalVelocity**: The proxy companion plugin now targets the Velocity proxy API instead of BungeeCord. This fixes cross-server coordinate/world teleportation which was silently broken when running under Velocity, because BungeeCord plugins are not loaded by the Velocity proxy.
+- Renamed module from `wgportal-bungee/` to `wgportal-velocity/`.
+- Updated AGENTS.md to reflect Velocity architecture.
+- Updated CI/CD to build WGPortalVelocity instead of WGPortalBungee.
+
 ## [1.0.4] - 2026-07-14
 
 ### Added
